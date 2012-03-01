@@ -7,21 +7,21 @@ module ActiveMerchant #:nodoc:
     class PaypalExpressGateway < Gateway
       include PaypalCommonAPI
       include PaypalExpressCommon
-      
+
       self.test_redirect_url = 'https://www.sandbox.paypal.com/cgi-bin/webscr'
       self.supported_countries = ['US']
       self.homepage_url = 'https://www.paypal.com/cgi-bin/webscr?cmd=xpt/merchant/ExpressCheckoutIntro-outside'
       self.display_name = 'PayPal Express Checkout'
-      
+
       def setup_authorization(money, options = {})
         requires!(options, :return_url, :cancel_return_url)
-        
+
         commit 'SetExpressCheckout', build_setup_request('Authorization', money, options)
       end
-      
+
       def setup_purchase(money, options = {})
         requires!(options, :return_url, :cancel_return_url)
-        
+
         commit 'SetExpressCheckout', build_setup_request('Sale', money, options)
       end
 
@@ -29,15 +29,20 @@ module ActiveMerchant #:nodoc:
         commit 'GetExpressCheckoutDetails', build_get_details_request(token)
       end
 
+
+      def transaction_details_for(transaction_id)
+        commit 'GetTransactionDetails', build_get_transaction_details_request(transaction_id)
+      end
+
       def authorize(money, options = {})
         requires!(options, :token, :payer_id)
-      
+
         commit 'DoExpressCheckoutPayment', build_sale_or_authorization_request('Authorization', money, options)
       end
 
       def purchase(money, options = {})
         requires!(options, :token, :payer_id)
-        
+
         commit 'DoExpressCheckoutPayment', build_sale_or_authorization_request('Sale', money, options)
       end
 
@@ -59,10 +64,22 @@ module ActiveMerchant #:nodoc:
 
         xml.target!
       end
-      
+
+      def build_get_transaction_details_request(transaction_id)
+        xml = Builder::XmlMarkup.new :indent => 2
+        xml.tag! 'GetTransactionDetailsReq', 'xmlns' => PAYPAL_NAMESPACE do
+          xml.tag! 'GetTransactionDetailsRequest', 'xmlns:n2' => EBAY_NAMESPACE do
+            xml.tag! 'n2:Version', API_VERSION
+            xml.tag! 'TransactionID', transaction_id
+          end
+        end
+
+        xml.target!
+      end
+
       def build_sale_or_authorization_request(action, money, options)
         currency_code = options[:currency] || currency(money)
-        
+
         xml = Builder::XmlMarkup.new :indent => 2
         xml.tag! 'DoExpressCheckoutPaymentReq', 'xmlns' => PAYPAL_NAMESPACE do
           xml.tag! 'DoExpressCheckoutPaymentRequest', 'xmlns:n2' => EBAY_NAMESPACE do
@@ -73,7 +90,7 @@ module ActiveMerchant #:nodoc:
               xml.tag! 'n2:PayerID', options[:payer_id]
               xml.tag! 'n2:PaymentDetails' do
                 xml.tag! 'n2:OrderTotal', localized_amount(money, currency_code), 'currencyID' => currency_code
-                
+
                 # All of the values must be included together and add up to the order total
                 if [:subtotal, :shipping, :handling, :tax].all?{ |o| options.has_key?(o) }
                   xml.tag! 'n2:ItemTotal', localized_amount(options[:subtotal], currency_code), 'currencyID' => currency_code
@@ -81,7 +98,7 @@ module ActiveMerchant #:nodoc:
                   xml.tag! 'n2:HandlingTotal', localized_amount(options[:handling], currency_code),'currencyID' => currency_code
                   xml.tag! 'n2:TaxTotal', localized_amount(options[:tax], currency_code), 'currencyID' => currency_code
                 end
-                
+
                 xml.tag! 'n2:NotifyURL', options[:notify_url]
                 xml.tag! 'n2:ButtonSource', application_id.to_s.slice(0,32) unless application_id.blank?
                 xml.tag! 'n2:InvoiceID', options[:order_id]
@@ -98,7 +115,7 @@ module ActiveMerchant #:nodoc:
 
       def build_setup_request(action, money, options)
         currency_code = options[:currency] || currency(money)
-        
+
         xml = Builder::XmlMarkup.new :indent => 2
         xml.tag! 'SetExpressCheckoutReq', 'xmlns' => PAYPAL_NAMESPACE do
           xml.tag! 'SetExpressCheckoutRequest', 'xmlns:n2' => EBAY_NAMESPACE do
@@ -177,7 +194,7 @@ module ActiveMerchant #:nodoc:
 
         xml.target!
       end
-      
+
       def build_reference_transaction_request(action, money, options)
         currency_code = options[:currency] || currency(money)
 
